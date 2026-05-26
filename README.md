@@ -26,6 +26,6 @@ The **Omega Assessment Kernel** is a high-fidelity, multi-tenant examination eng
 
 ### 1. Clone & Install Dependencies
 ```bash
-git clone [https://github.com/YOUR_USERNAME/Omega-Assess-Kernel.git](https://github.com/YOUR_USERNAME/Omega-Assess-Kernel.git)
+git clone [https://github.com/TamilSelvam616/Omega-Assess-Kernel.git](https://github.com/TamilSelvam616/Omega-Assess-Kernel.git)
 cd Omega-Assess-Kernel
 npm install
