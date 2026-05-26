@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Omega Assessment Kernel</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            cyberDark: '#0a0a0f',
+            cyberCard: '#12121e',
+            cyberBorder: '#1f1f33',
+            cyberBlue: '#3b82f6',
+            cyberGreen: '#10b981'
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-cyberDark text-gray-200 min-h-screen font-sans antialiased selection:bg-blue-500 selection:text-white">
+
+  <div id="toast-container" class="fixed top-6 right-6 z-[10005] space-y-3 pointer-events-none"></div>
+
+  <!-- AI Proctor Video Feed -->
+  <div id="proctor-container" class="fixed bottom-6 right-6 z-[1000] hidden transition-opacity duration-500 opacity-0">
+    <div class="bg-cyberCard border border-cyberBorder p-2 rounded-xl shadow-xl relative group">
+      <div class="absolute top-3 left-3 flex items-center space-x-2 z-10 bg-black/40 px-2 py-0.5 rounded backdrop-blur-sm">
+        <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]"></span>
+        <span class="text-[9px] font-mono font-bold tracking-widest text-red-100">AI PROCTOR</span>
+      </div>
+      <video id="proctor-video" autoplay muted playsinline class="w-56 h-40 object-cover rounded-lg border border-cyberBorder/50 saturate-50 contrast-125 brightness-90"></video>
+      <div id="proctor-status" class="absolute bottom-3 right-3 text-[9px] font-mono text-emerald-400 bg-black/60 px-2 py-0.5 rounded backdrop-blur-sm">Initializing Model...</div>
+    </div>
+  </div>
+
+  <div id="refresh-warning" class="fixed inset-0 bg-black/95 flex items-center justify-center z-[10002] hidden backdrop-blur-md">
+    <div class="bg-cyberCard border border-red-500/30 p-8 rounded-xl max-w-md w-full mx-4 shadow-2xl shadow-red-500/5 text-center">
+      <div class="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/20">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+      </div>
+      <h2 class="text-2xl font-bold mb-2 text-white">Reload Aborted</h2>
+      <p class="text-gray-400 mb-6 text-sm">Reloading or closing the page environment during an active runtime will force an immediate script auto-submission.</p>
+      <button id="continue-test" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 rounded-lg transition-all duration-200 shadow-lg shadow-blue-600/10">Resume Runtime Execution</button>
+    </div>
+  </div>
+
+  <div id="fullscreen-warning" class="fixed inset-0 bg-black/95 flex items-center justify-center z-[10001] hidden backdrop-blur-md">
+    <div class="bg-cyberCard border border-amber-500/30 p-8 rounded-xl max-w-md w-full mx-4 shadow-2xl shadow-amber-500/5 text-center">
+      <div class="w-16 h-16 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-amber-500/20">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-5V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l-5-5m11 5v-4m0 4h-4m4 0l-5-5"/></svg>
+      </div>
+      <h2 class="text-2xl font-bold mb-2 text-white">Display Restrict</h2>
+      <p class="text-gray-400 mb-6 text-sm">The kernel requires isolated fullscreen visualization to guarantee test integrity. Escaping window boundaries notes a system fault.</p>
+      <button id="continue-fullscreen" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-medium py-3 rounded-lg transition-all duration-200 shadow-lg shadow-amber-600/10">Re-engage Fullscreen</button>
+    </div>
+  </div>
+
+  <div class="max-w-5xl mx-auto py-12 px-4 sm:px-6">
+    
+    <header class="text-center mb-12" id="global-header">
+      <div class="inline-flex items-center space-x-2 bg-blue-500/5 border border-blue-500/10 px-4 py-1.5 rounded-full mb-4">
+        <span class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+        <span class="text-xs font-mono tracking-widest uppercase text-blue-400">System Engine v1.1.0</span>
+      </div>
+      <h1 class="text-4xl font-extrabold tracking-tight text-white sm:text-5xl">OMEGA <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">ASSESS KERNEL</span></h1>
+      <p class="mt-3 text-gray-400 max-w-md mx-auto text-sm">Secure, sandboxed full-stack examination engine with cryptographic verification frameworks.</p>
+    </header>
+
+    <main id="mode-selection" class="bg-cyberCard border border-cyberBorder p-8 rounded-2xl shadow-xl max-w-2xl mx-auto transition-all duration-300">
+      <h2 class="text-xl font-bold mb-6 text-white text-center font-mono tracking-wide">INITIALIZE TERMINAL MODE</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <button id="student-mode-btn" class="group relative bg-gradient-to-b from-gray-800 to-gray-900 border border-cyberBorder p-6 rounded-xl text-center hover:border-blue-500/40 transition-all duration-300 shadow-md">
+          <div class="w-12 h-12 bg-blue-500/10 text-blue-400 rounded-lg flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"/></svg>
+          </div>
+          <div class="text-lg font-bold text-white mb-1">Student Candidate</div>
+          <p class="text-xs text-gray-400">Access secure terminal space to execute pending examinations.</p>
+        </button>
+
+        <button id="teacher-mode-btn" class="group relative bg-gradient-to-b from-gray-800 to-gray-900 border border-cyberBorder p-6 rounded-xl text-center hover:border-emerald-500/40 transition-all duration-300 shadow-md">
+          <div class="w-12 h-12 bg-emerald-500/10 text-emerald-400 rounded-lg flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          </div>
+          <div class="text-lg font-bold text-white mb-1">Administrative Node</div>
+          <p class="text-xs text-gray-400">Deploy tests, evaluate telemetry logs, and export matrices.</p>
+        </button>
+      </div>
+    </main>
+
+    <div id="teacher-login" class="bg-cyberCard border border-cyberBorder p-8 rounded-2xl shadow-xl max-w-md mx-auto hidden transition-all duration-300">
+      <button id="back-to-mode-from-login" class="text-xs font-mono text-gray-400 hover:text-white flex items-center space-x-2 mb-6 group">
+        <svg class="w-4 h-4 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+        <span>RETURN TO SELECTION</span>
+      </button>
+      
+      <div class="flex border-b border-cyberBorder mb-6">
+        <button id="auth-tab-login" class="flex-1 pb-3 text-sm font-mono font-bold border-b-2 border-blue-500 text-white focus:outline-none transition-all">
+          01// LOG_IN
+        </button>
+        <button id="auth-tab-signup" class="flex-1 pb-3 text-sm font-mono font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-300 focus:outline-none transition-all">
+          02// REGISTER_NODE
+        </button>
+      </div>
+
+      <div class="text-center">
+      <div id="auth-context-wrapper" class="mb-6">
+        <h3 id="auth-title" class="text-xl font-bold text-white mb-2 tracking-tight">Access Control Center</h3>
+        <p id="auth-desc" class="text-xs text-gray-400">Mount your pre-registered Google Node context token parameters to access core telemetry dashboards.</p>
+      </div>
+
+      <div class="inline-flex items-center space-x-2 bg-emerald-500/5 border border-emerald-500/10 px-3 py-1 rounded-md mb-6 font-mono text-[10px] text-emerald-400">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+        <span>ENFORCED: ORGANIZATIONAL DOMAIN LOCK</span>
+      </div>
+        
+        <div class="flex flex-col items-center justify-center bg-cyberDark/40 border border-cyberBorder p-8 rounded-xl relative overflow-hidden">
+          <div class="absolute inset-0 bg-blue-500/5 blur-xl rounded-full transform translate-y-8"></div>
+          <div id="google-auth-button" class="relative z-10"></div>
+        </div>
+        
+        <div class="mt-6 text-[10px] font-mono text-gray-500 uppercase tracking-widest">
+          Secure OAuth2 Layer Verified
+        </div>
+      </div>
+    </div>
+
+    <div id="form-container" class="bg-cyberCard border border-cyberBorder p-8 rounded-2xl shadow-xl max-w-xl mx-auto hidden transition-all duration-300">
+      <button id="back-to-mode-from-student" class="text-xs font-mono text-gray-400 hover:text-white flex items-center space-x-2 mb-6 group">
+        <svg class="w-4 h-4 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+        <span>ESCAPE SEQUENCE</span>
+      </button>
+      
+      <h2 class="text-2xl font-bold text-white mb-2 tracking-tight">Candidate Verification</h2>
+      <p class="text-xs text-gray-400 mb-6">Input verification properties before generating sandbox sandbox testing environment.</p>
+      
+      <div class="space-y-4 mb-6">
+        <div>
+          <label for="name" class="block text-xs font-mono uppercase tracking-wider text-gray-400 mb-2">Legal Identity Name</label>
+          <input type="text" id="name" class="w-full bg-cyberDark/50 border border-cyberBorder rounded-lg p-3 text-white focus:outline-none focus:border-blue-500/50 transition-colors placeholder-gray-600 text-sm" placeholder="John Doe">
+          <p id="name-error" class="text-red-400 text-xs mt-1.5 hidden">Identity parameter missing.</p>
+        </div>
+        <div>
+          <label for="email" class="block text-xs font-mono uppercase tracking-wider text-gray-400 mb-2">Communication Router Node (Email)</label>
+          <input type="email" id="email" class="w-full bg-cyberDark/50 border border-cyberBorder rounded-lg p-3 text-white focus:outline-none focus:border-blue-500/50 transition-colors placeholder-gray-600 text-sm" placeholder="candidate@domain.com">
+          <p id="email-error" class="text-red-400 text-xs mt-1.5 hidden">Invalid packet routing address.</p>
+          <p id="email-exists-error" class="text-red-400 text-xs mt-1.5 hidden">This identifier contains a historical submission log. Single token validation required.</p>
+        </div>
+      </div>
+      
+      <div class="bg-blue-950/20 border border-blue-500/10 p-5 rounded-xl mb-6">
+        <h3 class="text-xs font-mono font-bold text-blue-400 uppercase tracking-widest mb-3">Enforced Environment Protocols:</h3>
+        <ul class="text-xs text-gray-400 space-y-2 font-mono">
+          <li class="flex items-start"><span class="text-blue-500 mr-2">»</span> Maximum Window Duration: <span id="test-time-minutes" class="text-white font-bold">5</span> Minutes</li>
+          <li class="flex items-start"><span class="text-blue-500 mr-2">»</span> Escape and Display shift tracking active (Auto-submission bound)</li>
+          <li class="flex items-start"><span class="text-blue-500 mr-2">»</span> Peripheral right-click nodes and standard console bindings locked</li>
+          <li class="flex items-start"><span class="text-blue-500 mr-2">»</span> Runtime state mutation maps will trigger instant validation faults</li>
+        </ul>
+      </div>
+      
+      <button id="start-btn" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium py-3.5 rounded-lg hover:from-blue-500 hover:to-indigo-500 transition-all duration-200 text-sm shadow-lg shadow-blue-600/10">
+        Instantiate Assessment Environment
+      </button>
+    </div>
+
+    <div id="quiz-container" class="bg-cyberCard border border-cyberBorder p-8 rounded-2xl shadow-xl hidden relative transition-all duration-300">
+      <div class="flex justify-between items-center pb-4 border-b border-cyberBorder mb-6">
+        <div>
+          <span class="text-xs font-mono text-gray-400 uppercase tracking-wider">SECURE ASSESSMENT SEGMENT</span>
+          <div class="text-xs text-gray-500 mt-0.5">Question <span id="current-q" class="text-blue-400 font-bold font-mono">1</span> / <span id="total-qs" class="font-mono">3</span></div>
+        </div>
+        <div id="timer" class="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-1.5 rounded-full text-sm font-mono font-bold tracking-wider">05:00</div>
+      </div>
+      
+      <div class="w-full bg-cyberDark h-1.5 rounded-full mb-8 overflow-hidden">
+        <div id="progress-bar" class="bg-gradient-to-r from-blue-500 to-indigo-500 h-full rounded-full transition-all duration-300 w-0"></div>
+      </div>
+      
+      <div id="question" class="text-lg font-medium mb-6 text-white leading-relaxed"></div>
+      <div id="options" class="space-y-3 mb-8"></div>
+      
+      <div class="flex justify-between items-center pt-6 border-t border-cyberBorder">
+        <button id="prev-btn" class="bg-gray-800 hover:bg-gray-700 text-gray-300 border border-cyberBorder px-5 py-2.5 rounded-lg text-sm transition-colors font-medium disabled:opacity-30 disabled:cursor-not-allowed">Segment Backward</button>
+        <button id="next-btn" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-lg text-sm transition-colors font-medium">Segment Forward</button>
+        <button id="submit-btn" class="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-lg text-sm transition-colors font-medium hidden">Finalize Runtime Sync</button>
+      </div>
+      
+      <div id="tab-warning" class="mt-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs font-mono text-center hidden">
+        ⚠️ Telemetry Alert: Screen/Focus context mutation noted <span id="tab-count" class="font-bold underline text-white">0</span> times. Sandbox breach threshold close.
+      </div>
+    </div>
+
+    <div id="result-container" class="bg-cyberCard border border-cyberBorder p-8 rounded-2xl shadow-xl max-w-xl mx-auto hidden text-center transition-all duration-300">
+      <button id="back-to-mode-from-result" class="text-xs font-mono text-gray-400 hover:text-white flex items-center space-x-2 mb-6 group mx-auto">
+        <svg class="w-4 h-4 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+        <span>DISENGAGE BASE CONTEXT</span>
+      </button>
+      
+      <div class="w-16 h-16 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      </div>
+      <h2 class="text-2xl font-bold text-white tracking-tight mb-2">Runtime Finalized Successfully</h2>
+      <p class="text-xs text-gray-400 mb-6">Cryptographic transaction packet synced to database cluster node architecture.</p>
+      
+      <div id="result" class="space-y-4 mb-8"></div>
+      
+      <button id="retry-btn" class="w-full bg-gray-800 hover:bg-gray-700 text-white font-medium py-3 rounded-lg border border-cyberBorder transition-colors text-sm">Instantiate Alternated Session Vector</button>
+    </div>
+
+    <div id="teacher-dashboard" class="bg-cyberCard border border-cyberBorder p-8 rounded-2xl shadow-xl hidden transition-all duration-300">
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-center pb-6 border-b border-cyberBorder mb-8 gap-4">
+        <div>
+          <button id="back-to-mode-from-teacher" class="text-xs font-mono text-gray-400 hover:text-white flex items-center space-x-2 mb-2 group">
+            <svg class="w-4 h-4 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+            <span>DISCONNECT TERMINAL</span>
+          </button>
+          <h2 class="text-2xl font-extrabold text-white tracking-tight">Kernel Control Dashboard</h2>
+        </div>
+        <div class="text-xs font-mono bg-cyberDark px-4 py-2 rounded-lg border border-cyberBorder">
+          Node Address: <span id="teacher-email-display" class="text-emerald-400 font-bold">instructor@domain.edu</span>
+        </div>
+      </div>
+      
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <div class="bg-cyberDark p-5 rounded-xl border border-cyberBorder lg:col-span-1">
+          <h3 class="text-xs font-mono font-bold tracking-widest text-gray-400 uppercase mb-4">Environment Locks</h3>
+          <div class="space-y-4 mb-4">
+            <div>
+              <label class="block text-xs font-mono text-gray-400 mb-1.5">Runtime Length (Min)</label>
+              <input type="number" id="test-duration" min="1" max="120" class="w-full bg-cyberCard border border-cyberBorder rounded-lg p-2.5 text-white font-mono text-sm focus:outline-none focus:border-blue-500/40">
+            </div>
+            <div>
+              <label class="block text-xs font-mono text-gray-400 mb-1.5">Focus Mutation Limit</label>
+              <input type="number" id="allowed-tab-switches" min="0" max="10" class="w-full bg-cyberCard border border-cyberBorder rounded-lg p-2.5 text-white font-mono text-sm focus:outline-none focus:border-blue-500/40">
+            </div>
+          </div>
+          <button id="save-settings" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-mono text-xs font-bold py-2.5 rounded-lg transition-colors">Commit Engine Mutate</button>
+        </div>
+        
+        <div class="lg:col-span-2 grid grid-cols-2 gap-4">
+          <div class="bg-cyberDark p-4 rounded-xl border border-cyberBorder flex flex-col justify-between">
+            <div class="text-xs font-mono tracking-wider text-gray-400 uppercase">Synchronized Nodes</div>
+            <div class="text-4xl font-extrabold text-white font-mono my-2" id="total-students">0</div>
+            <div class="text-[10px] text-gray-500 font-mono">Completed Transactions</div>
+          </div>
+          <div class="bg-cyberDark p-4 rounded-xl border border-cyberBorder flex flex-col justify-between">
+            <div class="text-xs font-mono tracking-wider text-gray-400 uppercase">Mean Vector Score</div>
+            <div class="text-4xl font-extrabold text-blue-400 font-mono my-2" id="avg-score">0%</div>
+            <div class="text-[10px] text-gray-500 font-mono">Aggregated Performance Mean</div>
+          </div>
+          <div class="bg-cyberDark p-4 rounded-xl border border-cyberBorder flex flex-col justify-between">
+            <div class="text-xs font-mono tracking-wider text-gray-400 uppercase">Floor Boundary Limit</div>
+            <div class="text-4xl font-extrabold text-red-400 font-mono my-2" id="min-score">0%</div>
+            <div class="text-[10px] text-gray-500 font-mono">Lowest Evaluation Data Input</div>
+          </div>
+          <div class="bg-cyberDark p-4 rounded-xl border border-cyberBorder flex flex-col justify-between">
+            <div class="text-xs font-mono tracking-wider text-gray-400 uppercase">Ceiling Target Delta</div>
+            <div class="text-4xl font-extrabold text-emerald-400 font-mono my-2" id="max-score">0%</div>
+            <div class="text-[10px] text-gray-500 font-mono">Highest Compiled Vector Record</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="bg-cyberDark p-6 rounded-xl border border-cyberBorder mb-8">
+        <h3 class="text-sm font-mono font-bold text-white uppercase tracking-wider mb-4">Dataset Blueprint Ingestion</h3>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="bg-cyberCard/40 border border-cyberBorder p-4 rounded-xl">
+            <h4 class="text-xs font-mono font-bold text-gray-300 uppercase mb-2">Ingest Microsoft Word (.docx)</h4>
+            <p class="text-[11px] text-gray-400 mb-4 font-mono leading-relaxed">Line parser patterns map strings beginning with "Q." to question maps. Key value arrays must utilize structural rules (e.g., A), B), C), D)) mapping markers tag lines explicitly matching <span class="text-emerald-400 font-bold">[Correct]</span>.</p>
+            
+            <div class="flex items-center space-x-3">
+              <input type="file" id="question-file" accept=".docx" class="hidden">
+              <label for="question-file" class="cursor-pointer bg-gray-800 hover:bg-gray-700 text-white font-mono text-xs border border-cyberBorder px-4 py-2 rounded-lg transition-colors">
+                Select Payload File
+              </label>
+              <span id="file-name" class="text-xs text-gray-500 truncate max-w-[150px]">No document target loaded</span>
+            </div>
+            <button id="upload-questions" class="mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs py-2 px-4 rounded-lg transition-colors w-full">Ingest Binary Matrix</button>
+            <div id="upload-status" class="mt-2 text-xs font-mono hidden"></div>
+          </div>
+          
+          <div class="bg-cyberCard/40 border border-cyberBorder p-4 rounded-xl flex flex-col justify-between">
+            <div>
+              <h4 class="text-xs font-mono font-bold text-gray-300 uppercase mb-2">Manual Object Node Assembly</h4>
+              <p class="text-[11px] text-gray-400 font-mono leading-relaxed mb-4">Directly stitch individual primitive elements into the live production database collection array structure variables manually.</p>
+              <div id="manual-questions" class="space-y-3 max-h-32 overflow-y-auto hidden mb-3"></div>
+            </div>
+            <div class="flex space-x-2">
+              <button id="add-question" class="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-mono text-xs border border-cyberBorder py-2 rounded-lg transition-colors">Append Slot</button>
+              <button id="save-questions" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-mono text-xs py-2 rounded-lg transition-colors">Commit Elements</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="bg-cyberDark rounded-xl border border-cyberBorder overflow-hidden">
+        <div class="p-4 border-b border-cyberBorder bg-cyberCard/30 flex justify-between items-center">
+          <h3 class="text-xs font-mono font-bold text-white uppercase tracking-wider">Historical Output Tracking Vectors</h3>
+          <div class="flex space-x-2">
+            <button id="export-results" class="bg-emerald-600/10 border border-emerald-500/20 hover:bg-emerald-600/20 text-emerald-400 px-3 py-1.5 rounded-lg text-xs font-mono transition-colors">Export File Matrix</button>
+            <button id="clear-results" class="bg-red-600/10 border border-red-500/20 hover:bg-red-600/20 text-red-400 px-3 py-1.5 rounded-lg text-xs font-mono transition-colors">Wipe Metrics</button>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left font-mono text-xs border-collapse">
+            <thead>
+              <tr class="bg-cyberCard/50 text-gray-400 border-b border-cyberBorder">
+                <th class="p-3 font-semibold uppercase tracking-wider">Candidate Node Identity</th>
+                <th class="p-3 font-semibold uppercase tracking-wider">Routing Email</th>
+                <th class="p-3 font-semibold uppercase tracking-wider text-center">Score Vector</th>
+                <th class="p-3 font-semibold uppercase tracking-wider text-center">Delta %</th>
+                <th class="p-3 font-semibold uppercase tracking-wider text-center">Execution Length</th>
+                <th class="p-3 font-semibold uppercase tracking-wider text-center">Breach Anomalies</th>
+                <th class="p-3 font-semibold uppercase tracking-wider text-center">Timestamp</th>
+                <th class="p-3 font-semibold uppercase tracking-wider text-center">Inspections</th>
+              </tr>
+            </thead>
+            <tbody id="results-table-body" class="divide-y divide-cyberBorder text-gray-300"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.17/mammoth.browser.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
